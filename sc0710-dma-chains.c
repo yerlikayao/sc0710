@@ -51,8 +51,11 @@ void sc0710_dma_chains_free(struct sc0710_dma_channel *ch)
 	int i;
 
 	/* Free up the SG table */
-	dma_free_coherent(&((struct pci_dev *)ch->dev->pci)->dev, ch->pt_size, ch->pt_cpu, ch->pt_dma);
-
+	#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
+		dma_free_coherent(&((struct pci_dev *)ch->dev->pci)->dev, ch->pt_size, ch->pt_cpu, ch->pt_dma);
+	#else
+		dca->buf_cpu = pci_alloc_consistent(dev->pci, dca->buf_size, &dca->buf_dma);
+	#endif
 
 	for (i = 0; i < ch->numDescriptorChains; i++) {
 		sc0710_dma_chain_free(ch, i);
