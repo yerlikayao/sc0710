@@ -51,7 +51,8 @@ void sc0710_dma_chains_free(struct sc0710_dma_channel *ch)
 	int i;
 
 	/* Free up the SG table */
-	pci_free_consistent(ch->dev->pci, ch->pt_size, ch->pt_cpu, ch->pt_dma);
+	dma_free_coherent(&((struct pci_dev *)ch->dev->pci)->dev, ch->pt_size, ch->pt_cpu, ch->pt_dma);
+
 
 	for (i = 0; i < ch->numDescriptorChains; i++) {
 		sc0710_dma_chain_free(ch, i);

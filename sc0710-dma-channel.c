@@ -32,18 +32,20 @@
 #include "sc0710.h"
 
 static int dma_channel_debug = 1;
-#define dprintk(level, fmt, arg...)\
-        do { if (dma_channel_debug >= level)\
-                printk(KERN_DEBUG "%s: " fmt, dev->name, ## arg);\
-        } while (0)
+#define dprintk(level, fmt, arg...)                          \
+	do                                                       \
+	{                                                        \
+		if (dma_channel_debug >= level)                      \
+			printk(KERN_DEBUG "%s: " fmt, dev->name, ##arg); \
+	} while (0)
 
 #define DMA_AUDIO_TRANSFER_SIZE 0x4000
-#define DMA_TRANSFER_CHAINS     4
+#define DMA_TRANSFER_CHAINS 4
 
 /* The ways of processing the DMA.
  * 1. Polled
  * 2. IRQ.
- * 
+ *
  * The first implementation is polled. See why below.
  * Later, we added IRQ support.
  *
@@ -184,13 +186,15 @@ static void sc0710_dma_dequeue_video(struct sc0710_dma_channel *ch, struct sc071
 			break;
 
 		vb_buf = list_entry(ch->v4l2_capture_list.next, struct sc0710_buffer, vb.queue);
-		if (vb_buf->vb.state != VIDEOBUF_QUEUED) {
+		if (vb_buf->vb.state != VIDEOBUF_QUEUED)
+		{
 			printk(KERN_ERR "%s() vb was not QUEUED, is 0x%x\n", __func__, vb_buf->vb.state);
 			break;
 		}
 
 		dst = videobuf_to_vmalloc(&vb_buf->vb);
-		if (!dst) {
+		if (!dst)
+		{
 			printk(KERN_ERR "%s() vb not accessible\n", __func__);
 			break;
 		}
@@ -199,10 +203,11 @@ static void sc0710_dma_dequeue_video(struct sc0710_dma_channel *ch, struct sc071
 		dprintk(3, "%s() copying %lu bytes\n", __func__, vb_buf->vb.size);
 
 		len = sc0710_dma_chain_dq_to_ptr(ch, chain, dst, vb_buf->vb.size);
-		if (len != vb_buf->vb.size) {
+		if (len != vb_buf->vb.size)
+		{
 			printk("%s() error copying %lu bytes, copied %d\n", __func__, vb_buf->vb.size, len);
 		}
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,0,0)
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 0, 0)
 		do_gettimeofday(&vb_buf->vb.ts);
 #else
 		vb_buf->vb.ts = ktime_get_ns();
@@ -234,24 +239,25 @@ static void sc0710_dma_dequeue_audio(struct sc0710_dma_channel *ch, struct sc071
 	int ret;
 	int i;
 
-	if (chain->numAllocations != 1) {
+	if (chain->numAllocations != 1)
+	{
 		printk("%s() allocations should be one, dma issue?\n", __func__);
 	}
 
-	for (i = 0; i < chain->numAllocations; i++) {
+	for (i = 0; i < chain->numAllocations; i++)
+	{
 
 		samplesPerChannel = dca->buf_size / stride;
 
 		ret = sc0710_audio_deliver_samples(ch->dev, ch,
-			(const u8 *)dca->buf_cpu,
-			16,     /* bitwidth */
-			stride,
-			2,      /* channels */
-			samplesPerChannel);
+										   (const u8 *)dca->buf_cpu,
+										   16, /* bitwidth */
+										   stride,
+										   2, /* channels */
+										   samplesPerChannel);
 
 		dca++;
 	}
-
 }
 
 /* For a given channel, audio or video, check if any of the writeback
@@ -275,7 +281,8 @@ int sc0710_dma_channel_service(struct sc0710_dma_channel *ch)
 	 * single we last checked, end early, nothing for us to do.
 	 */
 	v = sc_read(ch->dev, 1, ch->reg_dma_completed_descriptor_count);
-	if (v == ch->dma_completed_descriptor_count_last) {
+	if (v == ch->dma_completed_descriptor_count_last)
+	{
 		/* No new buffers since our last service call. */
 		return 0;
 	}
@@ -283,11 +290,12 @@ int sc0710_dma_channel_service(struct sc0710_dma_channel *ch)
 	dprintk(3, "ch#%d    was %d now %d\n", ch->nr, ch->dma_completed_descriptor_count_last, v);
 	ch->dma_completed_descriptor_count_last = v;
 
-	for (i = 0; i < ch->numDescriptorChains; i++) {
+	for (i = 0; i < ch->numDescriptorChains; i++)
+	{
 		chain = &ch->chains[i];
 
 		/* Last allocated SG buffer in the chain. */
-		dca = &chain->allocations[ chain->numAllocations - 1 ];
+		dca = &chain->allocations[chain->numAllocations - 1];
 
 		/* Read the writeback metadata once, cache it locally. */
 		wbm[0] = *dca->wbm[0];
@@ -296,16 +304,18 @@ int sc0710_dma_channel_service(struct sc0710_dma_channel *ch)
 		/* If the write back metadata is set, we know the chain is complete, we'll
 		 * need to process a complete video/audio transfer.
 		 */
-		if (wbm[0] && wbm[1]) {
+		if (wbm[0] && wbm[1])
+		{
 
-			if (dma_channel_debug > 2) {
+			if (dma_channel_debug > 2)
+			{
 				printk("%s ch#%d    [%02d] %08x - wbm %08x %08x (DQ) segs: %d\n",
-					ch->dev->name,
-					ch->nr,
-					i,
-					dca->desc->control,
-					wbm[0],
-					wbm[1], chain->numAllocations);
+					   ch->dev->name,
+					   ch->nr,
+					   i,
+					   dca->desc->control,
+					   wbm[0],
+					   wbm[1], chain->numAllocations);
 			}
 
 			/* Update some internal stats that measure throughput. */
@@ -313,10 +323,12 @@ int sc0710_dma_channel_service(struct sc0710_dma_channel *ch)
 			sc0710_things_per_second_update(&ch->descPerSecond, chain->numAllocations);
 
 			/* Service the audio, or video. */
-			if (ch->mediatype == CHTYPE_VIDEO) {
+			if (ch->mediatype == CHTYPE_VIDEO)
+			{
 				sc0710_dma_dequeue_video(ch, chain);
-			} else
-			if (ch->mediatype == CHTYPE_AUDIO) {
+			}
+			else if (ch->mediatype == CHTYPE_AUDIO)
+			{
 				sc0710_dma_dequeue_audio(ch, chain);
 			}
 
@@ -340,46 +352,51 @@ static int sc0710_dma_channel_chains_link(struct sc0710_dma_channel *ch)
 	int i, j;
 
 	/* Now that we have all of the dma allocations, we can update the descriptor tables with DMA io addresses. */
-	for (i = 0; i < ch->numDescriptorChains; i++) {
+	for (i = 0; i < ch->numDescriptorChains; i++)
+	{
 		chain = &ch->chains[i];
 
-		for (j = 0; j < chain->numAllocations; j++) {
+		for (j = 0; j < chain->numAllocations; j++)
+		{
 			dca = &chain->allocations[j];
 
 			dca->desc = pt_desc++;
 
-			if ((i + 1 == ch->numDescriptorChains) && (j + 1 == chain->numAllocations)) {
+			if ((i + 1 == ch->numDescriptorChains) && (j + 1 == chain->numAllocations))
+			{
 				/* Last descriptor in the last chains needs to point to the
 				 * first desc in first chain. */
 				dca->desc->next_l = (u64)ch->pt_dma;
 				dca->desc->next_h = (u64)ch->pt_dma >> 32;
-			} else {
+			}
+			else
+			{
 				/* Point to the next descriptor in the chain. */
 				dca->desc->next_l = (u64)curr_tbl + sizeof(struct sc0710_dma_descriptor);
 				dca->desc->next_h = ((u64)curr_tbl + sizeof(struct sc0710_dma_descriptor)) >> 32;
 			}
 
-			dca->desc->control     = 0xAD4B0000;
+			dca->desc->control = 0xAD4B0000;
 			dca->desc->lengthBytes = dca->buf_size;
-			dca->desc->src_l       = (u64)curr_wbm;
-			dca->desc->src_h       = (u64)curr_wbm >> 32;
-			dca->desc->dst_l       = (u64)dca->buf_dma;
-			dca->desc->dst_h       = (u64)dca->buf_dma >> 32;
+			dca->desc->src_l = (u64)curr_wbm;
+			dca->desc->src_h = (u64)curr_wbm >> 32;
+			dca->desc->dst_l = (u64)dca->buf_dma;
+			dca->desc->dst_h = (u64)dca->buf_dma >> 32;
 
-			dca->wbm[0]            = bus_to_virt(curr_wbm);
-			dca->wbm[1]            = bus_to_virt(curr_wbm) + sizeof(u32);
+			dca->wbm[0] = phys_to_virt(curr_wbm);
+			dca->wbm[1] = phys_to_virt(curr_wbm) + sizeof(u32);
 
 			curr_tbl += sizeof(struct sc0710_dma_descriptor);
 			curr_wbm += sizeof(struct sc0710_dma_descriptor);
 		} /* for all allocations in a chain */
-	} /* for all chains */
+	}	  /* for all chains */
 
 	return 0; /* Success */
 }
 
 int sc0710_dma_channel_alloc(struct sc0710_dev *dev, u32 nr, enum sc0710_channel_dir_e direction,
-	u32 baseaddr,
-	enum sc0710_channel_type_e mediatype)
+							 u32 baseaddr,
+							 enum sc0710_channel_type_e mediatype)
 {
 	int ret;
 	struct sc0710_dma_channel *ch = &dev->channel[nr];
@@ -405,18 +422,22 @@ int sc0710_dma_channel_alloc(struct sc0710_dev *dev, u32 nr, enum sc0710_channel
 	sc0710_things_per_second_reset(&ch->descPerSecond);
 	sc0710_things_per_second_reset(&ch->audioSamplesPerSecond);
 
-	if (ch->mediatype == CHTYPE_VIDEO) {
+	if (ch->mediatype == CHTYPE_VIDEO)
+	{
 		ch->numDescriptorChains = DMA_TRANSFER_CHAINS;
 		/* 1280x 720p - default sizing during initialization.
 		 * we'll free and re-alloc up or down prior to streaming.
 		 */
 		ch->buf_size = 1280 * 2 * 720; /* 16bit pixels for everything. */
 		printk("Allocating channel for size %d\n", ch->buf_size);
-	} else
-	if (ch->mediatype == CHTYPE_AUDIO) {
+	}
+	else if (ch->mediatype == CHTYPE_AUDIO)
+	{
 		ch->numDescriptorChains = DMA_TRANSFER_CHAINS;
 		ch->buf_size = DMA_AUDIO_TRANSFER_SIZE;
-	} else {
+	}
+	else
+	{
 		ch->numDescriptorChains = 0;
 	}
 
@@ -425,7 +446,7 @@ int sc0710_dma_channel_alloc(struct sc0710_dev *dev, u32 nr, enum sc0710_channel
 	/* allocate the descriptor table, its contigious. */
 	ch->pt_size = PAGE_SIZE * 2;
 
-	ch->pt_cpu = pci_alloc_consistent(dev->pci, ch->pt_size, &ch->pt_dma);
+	ch->pt_cpu = dma_alloc_coherent(&((struct pci_dev *)dev->pci)->dev, ch->pt_size, &ch->pt_dma, GFP_ATOMIC);
 	if (ch->pt_cpu == 0)
 		return -1;
 
@@ -454,10 +475,10 @@ int sc0710_dma_channel_alloc(struct sc0710_dev *dev, u32 nr, enum sc0710_channel
 
 	/* SGDMA Controller */
 	ch->register_sg_base = baseaddr + 0x4000;
-        ch->reg_sg_start_l = ch->register_sg_base + 0x80;
-        ch->reg_sg_start_h = ch->register_sg_base + 0x84;
-        ch->reg_sg_adj = ch->register_sg_base + 0x88;
-        ch->reg_sg_credits = ch->register_sg_base + 0x8c;
+	ch->reg_sg_start_l = ch->register_sg_base + 0x80;
+	ch->reg_sg_start_h = ch->register_sg_base + 0x84;
+	ch->reg_sg_adj = ch->register_sg_base + 0x88;
+	ch->reg_sg_credits = ch->register_sg_base + 0x8c;
 
 	/* Allocate all the DMA buffers for this channel. */
 	sc0710_dma_chains_alloc(ch, ch->buf_size);
@@ -473,10 +494,12 @@ int sc0710_dma_channel_alloc(struct sc0710_dev *dev, u32 nr, enum sc0710_channel
 	sc0710_dma_chains_dump(ch);
 
 	/* Register and create various linux4linux and audio subsystem devices. */
-	if (ch->mediatype == CHTYPE_VIDEO) {
+	if (ch->mediatype == CHTYPE_VIDEO)
+	{
 		ret = sc0710_video_register(ch); /* TODO: Check result */
 	}
-	if (ch->mediatype == CHTYPE_AUDIO) {
+	if (ch->mediatype == CHTYPE_AUDIO)
+	{
 		sc0710_audio_register(dev); /* TODO: Check result */
 	}
 
@@ -490,14 +513,15 @@ int sc0710_dma_channel_alloc(struct sc0710_dev *dev, u32 nr, enum sc0710_channel
  * DMA transfer sizes will be needed for a single video frame.
  */
 int sc0710_dma_channel_resize(struct sc0710_dev *dev, u32 nr, enum sc0710_channel_dir_e direction,
-	u32 baseaddr,
-	enum sc0710_channel_type_e mediatype)
+							  u32 baseaddr,
+							  enum sc0710_channel_type_e mediatype)
 {
 	struct sc0710_dma_channel *ch = &dev->channel[nr];
 	if (nr >= SC0710_MAX_CHANNELS)
 		return -1;
 
-	if (!dev->fmt) {
+	if (!dev->fmt)
+	{
 		return -1;
 	}
 
@@ -505,7 +529,8 @@ int sc0710_dma_channel_resize(struct sc0710_dev *dev, u32 nr, enum sc0710_channe
 
 	printk(KERN_INFO "%s channel %d resized for framesize %d\n", dev->name, nr, dev->fmt->framesize);
 
-	if (ch->mediatype == CHTYPE_VIDEO) {
+	if (ch->mediatype == CHTYPE_VIDEO)
+	{
 		ch->numDescriptorChains = DMA_TRANSFER_CHAINS;
 		/* When processing starts, tear down the current DMA allocations and
 		 * create new DMA allocation sizes suitable for the detect video frame
@@ -514,12 +539,15 @@ int sc0710_dma_channel_resize(struct sc0710_dev *dev, u32 nr, enum sc0710_channe
 		 */
 		ch->buf_size = dev->fmt->framesize;
 		printk("Resizing channel for size %d\n", ch->buf_size);
-	} else
-	if (ch->mediatype == CHTYPE_AUDIO) {
+	}
+	else if (ch->mediatype == CHTYPE_AUDIO)
+	{
 		/* Audio always uses a fixed transfer size */
 		ch->numDescriptorChains = DMA_TRANSFER_CHAINS;
 		ch->buf_size = DMA_AUDIO_TRANSFER_SIZE;
-	} else {
+	}
+	else
+	{
 		/* TODO: Safety, just return an error here? */
 		ch->numDescriptorChains = 0;
 	}
@@ -529,7 +557,7 @@ int sc0710_dma_channel_resize(struct sc0710_dev *dev, u32 nr, enum sc0710_channe
 	/* allocate the descriptor table, its contigious. */
 	ch->pt_size = PAGE_SIZE * 2;
 
-	ch->pt_cpu = pci_alloc_consistent(dev->pci, ch->pt_size, &ch->pt_dma);
+	ch->pt_cpu = dma_alloc_coherent(&((struct pci_dev *)dev->pci)->dev, ch->pt_size, &ch->pt_dma, GFP_ATOMIC);
 	if (ch->pt_cpu == 0)
 		return -1;
 
@@ -561,10 +589,12 @@ void sc0710_dma_channel_free(struct sc0710_dev *dev, u32 nr)
 	ch->enabled = 0;
 
 	/* Unregister video and audio subsystems and detach them from this driver. */
-	if (ch->mediatype == CHTYPE_VIDEO) {
+	if (ch->mediatype == CHTYPE_VIDEO)
+	{
 		sc0710_video_unregister(ch);
 	}
-	if (ch->mediatype == CHTYPE_AUDIO) {
+	if (ch->mediatype == CHTYPE_AUDIO)
+	{
 		sc0710_audio_unregister(dev);
 	}
 
